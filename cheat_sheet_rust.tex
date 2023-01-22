@@ -22,6 +22,167 @@
 
 \section{Ресуры по языку Rust}
 
+\url{https://www.rust-lang.org/tools}
+
+\url{https://doc.rust-lang.org/book/}
+
+\url{https://doc.rust-lang.org/stable/rust-by-example/}
+
+\section{Установка Rust}
+
+Установить Rust проще всего с помощью утилиты \texttt{rustup} -- это установщик языка и менеджер версий. Для операционной системы Windows можно скачать \texttt{rustup-init.exe} со страницы проекта \url{https://www.rust-lang.org/learn/get-started}
+
+Установить Rust на Linux можно так
+\begin{lstlisting}[
+style = bash,
+numbers = none
+]
+$ curl https://sh.rustup.rs -sSf | bash
+...
+Current installation options:
+
+
+default host triple: x86_64-unknown-linux-gnu
+default toolchain: stable (default)
+profile: default
+modify PATH variable: yes
+
+1) Proceed with installation (default)
+2) Customize installation
+3) Cancel installation
+>1
+
+info: profile set to 'default'
+info: default host triple is x86_64-unknown-linux-gnu
+info: syncing channel updates for 'stable-x86_64-unknown-linux-gnu'
+...
+\end{lstlisting}
+
+Rust часто обновляется и чтобы получить последнюю версию, можно воспользоваться командной \texttt{rustup update}.
+
+Собрать проект и обновить его зависимости можно с помощью утилиты \texttt{cargo}
+\begin{lstlisting}[
+style = bash,
+numbers = none
+]
+cargo build  # build your project
+cargo run  # cargo run
+cargo test  # test project 
+cargo doc  # build documentation for your project
+cargo publish  # publish a libarary to crates.io
+\end{lstlisting}
+
+То есть \texttt{cargo} знает, как превратить Rust-код в исполняемый бинарный файл, а также может управлять процессом загрузки и компиляции проектных зависимостей.
+
+\section{Вводные замечания}
+
+\emph{Система владения} устанавливает \emph{время жизни} каждого значения, что делает ненужным сборку мусора в ядре языка и обеспечивает надежные, но вместе с тем гибкие интерфейсы для управления такими ресурсами, как сокеты и описатели файлов. Передеча (move) позволяет передавать значение от одного владельца другому, а заимствование (borrowing) -- использовать значение временно, не изменяя владельца.  
+
+Rust -- типобезопасный язык. Но что понимается под типобезопасностью? Ниже приведено определение <<неопределенного поведения>> из стандарта языка С 1999 года, известного под названием <<C99>>: \emph{неопределнное поведение -- это поведение, являющееся следствием использования непереносимой или некорректной программной конструкции либо некорректных данных, для которого в настоящем Международном стандарте нет никаких требований}.
+
+Рассмотрим следующую программу на С
+\begin{lstlisting}[
+style = c_cpp,
+numbers = none
+]
+int main(int argc, char **argv) {
+    // объявление одноэлементного массива беззнаковых длинных целых чисел
+    unsigned long a[1];
+    // обращение к 4-ому элементу массива; индекс, нарушает границу диапазона
+    a[3] = 0x7ffff7b36cebUL; 
+    return 0;
+}
+\end{lstlisting}
+
+Эта программа обращается к элементу за концом массива \texttt{a}, поэтому согласно С99 ее \emph{поведение не определно}, т.е. она может делать все что угодно. {\color{red}<<Неопределенная>> операция не просто возвращает неопределнный результат, она дает программе карт-бланш на \emph{произвольное выполнение}(!).}
+
+С99 предоставляет компилятору такое право, чтобы он мог генерировать более быстрый код. Чем возлагать на компилятор ответственность за обнаружение и обработку странного поведения вроде выхода за конец массива, стандарт предполагает, что программист должен позаботиться о том, чтобы такие ситуации никогда не возникали.
+
+Если программа написана так, что ни на каком пути выполнения \emph{неопределенное выполнение невозможно}, то будем говорить, что программа \emph{корректна} (well defined).
+
+Если встроенные в язык проверки \emph{гарантируют корректность программы}, то будем называть язык \emph{типобизопасным} (type safe).
+
+Тщательно напсанная программа на C или C++ может оказаться типобезопасной, {\color{red}но ни C, ни C++ не является типобезопасным языком}: в приведенном выше примере нет ошибок типизации, и тем не менее она демонстрирует неопределенное поведение. С другой стороны, {\color{blue}Python -- \emph{типобезопасный} язык}, его интерпретатор тратит время на обнаружение выхода за границы массива и обрабатывает его лучше, чем компилятор С.
+
+\section{Начало работы}
+
+Создать проект на Rust можно командной \texttt{cargo new <project\_name>}
+\begin{lstlisting}[
+style = bash,
+numbers = none	
+]
+$ cargo new hello  # создать проект hello
+$ tree 
+.
+hello/
+  Cargo.toml
+  src/
+    main.rs
+$ cd hello
+$ cargo run  # запустить проект
+   Compiling hello v0.1.0 (/home/kosyachenko/Projects/GARBAGE/rust_projects/hello)
+Finished dev [unoptimized + debuginfo] target(s) in 0.42s
+Running `target/debug/hello`
+Hello, world!
+# Дерево проекта изменилось
+$ tree
+.
+Cargo.lock  # артефакт
+Cargo.toml
+src/
+  main.rs
+target/  # артефакт
+  CACHEDIR.TAG
+  debug/
+    build
+    deps/
+      hello-27...
+      hello-27...d
+    examples/
+    hello
+    hello.d
+    incremental/
+      hello-imy.../
+        s-ghim...
+\end{lstlisting}
+
+В основном каталоге имеется файл \texttt{Cargo.toml}, содержащий описание метаданных проекта, таких как имя проекта, его версия и его зависимости. Исходный код попадает в директорию \texttt{src}.
+
+Выполнение команды \texttt{cargo run} привело также к добавлению к проекту новых файлов. Теперь у нас в основном каталоге проекта есть файл \texttt{Cargo.lock} и каталог \texttt{target}. В \texttt{Cargo.lock} указываются конкретные номера версий всех зависимостей, чтобы будущие сборки составлялись точно также, как и эта, пока содержимое \texttt{Cargo.toml} не изменится.
+
+\subsection{Первая программа на Rust}
+
+Нужно как обычно с помощью \texttt{cargo new hello} создать новый проект. Перейти в созданную директорию проекта и в файле \texttt{main.rs} директории \texttt{src} написать следущее
+\begin{lstlisting}[
+title = {\sffamily ./src/main.rs},
+language = C++,
+numbers = none
+]
+fn greet_world() {
+    println!("Hello, world!");
+    let southern_germany = "Germany";
+    let japan = "Japan";
+    let regions = [southern_germany, japan];
+    
+    for region in regions.iter() {
+        println!("{}", &region);
+    }
+}
+
+fn main() {
+    greet_world();
+}
+\end{lstlisting}
+
+Восклицательный знак свидетельствует об использовании \emph{макроса}. Для операции присваивания в Rust, которую правильнее было бы называть \emph{привязкой переменной}, используется ключевое слово \texttt{let}. Поддержка Unicode предоставляется самим языком. 
+
+Для \emph{литералов массива} используются \emph{квадратные скобки}. Для возврата итератора метод \texttt{iter()} может присутствовать во многих типах. Амперсанд <<заимствует>> \texttt{region} так, чтобы доступ предоставлялся \emph{только для чтения}.
+
+Строки ганатировано получают кодировку UTF-8.
+
+
+
+
 
 
 
