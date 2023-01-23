@@ -1,3 +1,4 @@
+
 \documentclass[%
 	11pt,
 	a4paper,
@@ -153,9 +154,9 @@ target/  # артефакт
 \subsection{Первая программа на Rust}
 
 Нужно как обычно с помощью \texttt{cargo new hello} создать новый проект. Перейти в созданную директорию проекта и в файле \texttt{main.rs} директории \texttt{src} написать следущее
-\begin{lstlisting}[
+\begin{lstlisting}[			
 title = {\sffamily ./src/main.rs},
-language = C++,
+language = Rust,
 numbers = none
 ]
 fn greet_world() {
@@ -179,6 +180,105 @@ fn main() {
 Для \emph{литералов массива} используются \emph{квадратные скобки}. Для возврата итератора метод \texttt{iter()} может присутствовать во многих типах. Амперсанд <<заимствует>> \texttt{region} так, чтобы доступ предоставлялся \emph{только для чтения}.
 
 Строки ганатировано получают кодировку UTF-8.
+
+Пример
+\begin{lstlisting}[
+title = {\sffamily src/main.rs},
+language = Rust,
+numbers = none
+]
+fn main() {  // (1)
+    let penguin_data = "\  // (2)
+    common name,length (cm)
+    Little penguin,33
+    Yellow-eyed penguin,65
+    Fiordland penguin,60
+    Invalid,data
+    ";
+    
+    let records = penguin_data.lines();
+    
+    for (i, record) in records.enumerate() {
+        if i == 0 || record.trim().len() == 0 {  // (3)
+            continue;
+        }
+    
+        let fields: Vec<_> = record  // (4)
+            .split(',')  // (5)
+            .map(|filed| field.trim())  // (6)
+            .collect();  // (7)
+            if cfg!(debug_assertations) {  // (8)
+                eprintln!("debug: {:?} -> {:?}", record, fields);  // (9)
+            }
+        
+            let name = fields[0];
+            if let Ok(length) = fields[1].parse::<f32>() {  // (10)
+                println!("{}, {} cm", name, length);  // (11)
+            }
+    }
+}
+\end{lstlisting}
+
+(1) -- исполняемым проектам требуется функия \texttt{main()}. (2) -- отключение завершающего символа новой строки. (3) -- пропуск строки заголовка и строк, состоящих из одних пробелов. (4) -- начало со строки текста. (5) -- разбиение записи на поля. (6) -- обрезка пробелов в каждом поле. (7) -- Сборка набора полей. (8) -- \texttt{cfg!} проверяет конфигурацию в процессе компиляции. (9) -- \texttt{eprintln!} выводит данные на страндартное устройство сообщений об ошибках (stderr). (10) -- попытка выполнения парсинга поля в виде числа с плавающей точкой. (11) -- \texttt{println!} помещает данные на страндартное устройство вывода (stdout).
+
+Переменная \texttt{fields} помечена типом \verb|Vec<_>|. \verb|Vec| -- сокращение от \verb|_verctor_|, типа коллекции, способного динамически расширяться. Знак подчеркивания предписывает Rust вывести тип элемента.
+
+На Python решение выглядело бы так
+\begin{lstlisting}[
+style = ironpython,
+numbers = none
+]
+#!python
+import typing as t
+
+def main():
+    penguin_data: str = """
+        common name, length (cm)
+        Little penguin, 33
+        Yellow-eyed penguin, 65
+        Fiordland penguin, 60
+        Invalid, data
+    """
+    
+    records: t.List[str] = penguin_data.split("\n")
+    
+    for (i, record) in enumerate(records):
+        if i == 0 or len(record.strip()) == 0:
+            continue
+            
+        fields: t.List[str] = list(map(lambda field: field.strip()), records.split(","))
+        # Или с помощью спискового включения
+        # fields: t.List[str] = [record.strip() for record in records.split(",")]
+        
+        if __debug__:
+            print(f"debug: {record} -> {fields}")
+            
+        name: str = fields[0]
+        # На Rust это блок выглядит изящнее
+        try:
+            length = float(fields[1])
+        except ValueError as err:
+            continue
+        else:
+            print(f"{name}, {length} cm")
+            
+
+if __name__ == "__main__":
+    main()
+\end{lstlisting}
+
+Макросы похожи на функции, но вместо возвращения данных они возвращают код. Макросы часто используются для упрощения общеупотребительных шаблонов. Поле заполнения \verb|{}| заставляет Rust воспользоваться методом представления значения в виде строки, который определил программист, а не представлением по умолчанию, доступным при указании поля заполнителя \verb|{:?}|.
+
+\verb|if let Ok(length) = fields[1].parse::<f32>()| читается так <<попытаться разобрать \texttt{fields[1]} в виде 32-разрядного числа с плавающей точкой, и в случае успеха присвоить число переменной \verb|length|>>.
+
+Конструкция \verb|if let| -- краткий метод обработки данных, предоставляющий также локальную переменную, которой присваиваются эти данные. Метод \verb|parse()| возвращает \texttt{Ok(T)} (где \verb|T| означает любой тип), если ему удается провести разбор строки; в противном случае он возвращает \texttt{Err(E)} (где \texttt{E} означает тип ошибки). Применение \verb|if let Ok(T)| позволяет пропустить любые случаи ошибок, подобные той, что встречаются при обработки строки \texttt{Invalid,data}.
+
+Когда Rust не способен вывести тип из окружающего контекста, он запрашивает конкретное указание. В вызов \verb|parse()| включается встроенная аннотация типа в виде \verb|parse::<f32>()|.
+
+Преобразование исходного кода в исполняемый файл называется \emph{компиляцией}.
+
+
+  
 
 
 
