@@ -458,6 +458,73 @@ for item in 0..10 {
 }
 \end{lstlisting}
 
+Прерывание цикла выполняется с помощью ключевого слова \texttt{break}. При этом Rust работает превычным образом
+\begin{lstlisting}[
+style = c_cpp,
+numbers = none
+]
+fn main() {
+    for (x, y) in (0..).zip(0..) { // zip работает на бесконечной последовательности
+        if x + y > 100 {
+            break;
+        }
+        println!("x={}, y={}", x, y);
+    }
+}
+\end{lstlisting}
+
+В Python пришлось бы организовывать бесконечный цикл \texttt{while}, например так
+\begin{lstlisting}[
+style = ironpython,
+numbers = none
+]
+def main():
+    x, y = (0, 0)
+    while True:
+        if x + y > 100:
+            break
+        print(f"x={x}, y={y}")
+        x += 1
+        y += 1
+\end{lstlisting}
+
+Прерывание во вложенных циклах. Прервать выполнение вложенного цикла можно с помощью \emph{меток циклов}. Метка цикла представляет собой идентификатор с префиксом в виде \emph{апострофа} \verb|'|
+\begin{lstlisting}[
+style = c_cpp,
+numbers = none	
+]
+`outer: for x in 0.. {
+    for y in 0.. {
+        for z in 0.. {
+            if x + y + z > 10 {
+                break `outer;
+            }
+            // ...
+        }
+    }
+}
+\end{lstlisting}
+
+Условное ветвление. \texttt{if} допускает применение любого выражения, вычисленного в булево значение (\texttt{true} или \texttt{false}). Когда нужно протестировать несколько значений, можно добавить цепочку блоков \texttt{if else}. Блок \texttt{else} соответствует всему, чему еще не нашлось соответствие. Например
+\begin{lstlisting}[
+style = c_cpp,
+numbers = none
+]
+if item == 42 {
+    // ...
+} else if item == 132 {
+    // ...
+} else {
+    // ...
+}
+\end{lstlisting}
+
+В Rust отсутствует концепция <<правдивых>> или <<ложных>> типов. В других языках (например, в Python) допускается, чтобы особые значения, например 0 или пустая строка, означали \texttt{false}, а другие значения означали \texttt{true}, но в Rust это не практикуется. Единственным значением, которое может быть \texttt{true}, является \texttt{true}, а за \texttt{false} может принимать только \texttt{false}.
+
+
+
+
+
 
 
 
