@@ -521,6 +521,46 @@ if item == 42 {
 
 В Rust отсутствует концепция <<правдивых>> или <<ложных>> типов. В других языках (например, в Python) допускается, чтобы особые значения, например 0 или пустая строка, означали \texttt{false}, а другие значения означали \texttt{true}, но в Rust это не практикуется. Единственным значением, которое может быть \texttt{true}, является \texttt{true}, а за \texttt{false} может принимать только \texttt{false}.
 
+Rust -- язык, основанный на выражениях. Для Rust характерно обходится без ключевого слова \texttt{return}
+\begin{lstlisting}[
+style = c_cpp,
+numbers = none
+]
+fn is_even(n: i32) -> bool {
+    n % 2 == 0
+}
+
+fn main() {
+    let n: i32 = 123456;
+    let description = if is_even(n) {
+        "even"
+    } else {
+        "odd"
+    };
+
+    prinln!("n={} is {}", n, description);
+}
+\end{lstlisting}
+
+Этот прием может распространяться и на другие блоки, включая \texttt{match}
+\begin{lstlisting}[
+style = c_cpp,
+numbers = none
+]
+fn is_even(n: i32) -> bool {
+    n % 2 == 0
+}
+
+fn main() {
+    lst n = 654321;
+    let description = match is_even(n) {
+        true => "even",
+        false => "odd",
+    };
+
+    println!("n={} is {}", n, description);
+}
+\end{lstlisting}
 
 
 
