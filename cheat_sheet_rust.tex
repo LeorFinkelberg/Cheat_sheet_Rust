@@ -695,7 +695,194 @@ fn main() {
 
 \verb|Vec<T>| эффективнее всего работает при возможности указания размера с помощью функции \verb|Vec::with_capacity()|. Предоставление этого показателя сводит к минимуму необходимое количество выделенной памяти операционной системой.
 
+\subsection{Чтение данных из файлов}
 
+Пример
+\begin{lstlisting}[
+style = c_cpp,
+numbers = none
+]
+use std::fs::File;
+use std::io::BufReader;
+use std::io::prelude;
+
+fn main() {
+    let f = File::open("readme.md").unwrap();
+    let reader = BufReader::new(f);
+    
+    for line_ in reader.lines() {
+        let line = line_.unwrap();
+        println!("{} ({} bytes long)", line, line.len());
+    }
+}
+\end{lstlisting}
+
+На Python было бы так
+\begin{lstlisting}[
+style = ironpython,
+numbers = none
+]
+def main():
+    with open("readme.md", encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            print(f"{line} ({len(line)} bytes long)")
+\end{lstlisting}
+
+\section{Составные типы данных}
+
+Чтобы помешать компилятору выдавать предупреждения, в них будут задействованы атрибуты \verb|#![Allow(unused_variables)]|.
+
+Тип, известный как \emph{unit} \verb|()|, формально считается \emph{кортежем нулевой длины}. Он используется для выражения того, что \emph{функция не возвращает никакого значения}.
+
+Функции, которые не имеют возвращаемого типа, возвращают \verb|()|, и выражения, заканчивающиеся точкой с запятой \verb|;|, также возвращают \verb|()|. Например, функция \texttt{report()} в следующем блоке кода подразумеваемо возвращает тип \emph{unit}
+\begin{lstlisting}[
+style = c_cpp,
+numbers = none
+]
+use std::fmt::Debug;
+
+fn report<T: Debug>(item: T) { // item может быть любого типа с реализацией std::fmt::Debug
+    println!("{:?}", item);
+}
+\end{lstlisting}
+
+А в этом примере возвращение типа unit задается в явном виде
+\begin{lstlisting}[
+style = c_cpp,
+numbers = none
+]
+fn clear(text: &mut String) -> () {
+    *text = String::from(""); // замена строкового значения, на которое указывает text, пустой строкой
+}
+\end{lstlisting}
+
+В Python затереть значение переменной в глобальной области видимости можно было бы так
+\begin{lstlisting}[
+style = ironpython,
+numbers = none
+]
+>>> text = "global"
+>>> def clear():
+      global text  # просто расширяем область видимости функции
+      text = ""  # привязываем переменную text к пустой строке
+>>> text  # 'global'
+>>> clear()
+>>> text  # '' 
+\end{lstlisting}
+
+Последнее выражение в функции не должно заканчиваться точкой с запятой. \emph{Восклицательный знак} \verb|!|, известен как тип <<Never>>. \verb|Never| показывает, что \emph{функция никогда ничего не возвращает}, особенно при гарантированном сбое.
+
+Пример
+\begin{lstlisting}[
+style = c_cpp,
+numbers = none
+]
+fn dead_end() -> ! { // функция никогда ничего не возвращает
+    panic!("you have reached a dead end");
+}
+\end{lstlisting}
+
+Макрос \verb|panic!| вызывает сбой программы. То есть функция \emph{гарантировано никогда не вернет управление} вызвавшему ее коду.
+
+Структура \texttt{struct} позволяет создавать составной тип, образованный из других типов. Например
+\begin{lstlisting}[
+style = c_cpp,
+numbers = none
+]
+struct File {
+    name: String,
+    data: Vec<u8>,
+}
+\end{lstlisting}
+
+Чтобы позволить структуре \texttt{File} стать выводимой на экран строкой, нужно поместить строку \verb|#[derive(Debug)]| перед определением структуры
+
+\begin{lstlisting}[
+style = c_cpp,
+numbers = none
+]
+#[derive(Debug)]  // чтобы можно было вывести на печать структуру
+struct File {
+	name: String,
+	data: Vec<u8>,
+}
+\end{lstlisting}
+
+При определении структуры можно явно указывать время жизни каждого поля. Явное указание времени жизни требуется, когда поле является ссылкой на другой объект.
+
+Экземпляр структуры можно создать так
+\begin{lstlisting}[
+style = c_cpp,
+numbers = none
+]
+fn main() {
+    let f1 = File { // экземпляр структуры
+        name: String::from("f1.txt"),
+        data: Vec::new(),
+    };
+
+    let f1_name = &f1.name;
+    let f1_length = &f1.data.len();
+    
+    println!("{:?}", f1);
+}
+\end{lstlisting}
+
+К началу имени добавляется амперсанд (\verb|&f1.name|), свидетельствующий о желании получить \emph{доступ к данным по ссылке}. На языке Rust это означает, что переменные \verb|f1_name| и \verb|f1_length| \emph{заимствуют} данные, на которые они ссылаются.
+
+\subsection{Добавление метдов к структуре struct путем использования блока impl}
+
+В Rust классы, так сказать, распадаются на структуры \texttt{struct} и реализации \texttt{impl}
+\begin{lstlisting}[
+style = c_cpp,
+numbers = none
+]
+struct File {
+    // data
+}
+
+impl File {
+    // methods
+}
+\end{lstlisting}
+
+Rust отличается от других языков, поддерживающих методы: в нем нет ключевого слова \texttt{class}. Типы, созданные с помощью блока \texttt{struct}, иногда кажутся классами, но поскольку они \emph{не поддерживают наследование}, то хорошо, что их называли по-другому.
+
+Для определения методов Rust-программистами используется блок \texttt{impl}.
+
+Создание объектов с уместными значениями по умолчанию выполняется с помощью метода \texttt{new()}. Каждую структуру можно создать, воспользовавшись литеральным синтаксисом, но это приводит к ненужной многословности.
+
+Использование \texttt{new()} -- соглашение, принятое в сообществе Rust. В отличие от других языков, \texttt{new} не является ключевым словом и не имеет какого-либо особого статуса по сравнению с другими методами
+\begin{lstlisting}[
+style = c_cpp,
+numbers = none
+]
+#[derive(Debug)]
+struct File {
+    name: String,
+    data: Vec<u8>,
+}
+
+impl File {
+    fn new(name: &str) -> File {
+        File {
+            name: String::from(name),
+            data: Vec::new(),
+        }
+    }
+}
+
+fn main() {
+    let f3 = File::new("f3.txt");
+    
+    let f3_name = &f3.name;
+    let f3_length = f3.data.len();
+    
+    println!("{:?}", f3);
+    println!("{} is {} bytes long", f3_name, f3_length);
+}
+\end{lstlisting}
 
 
 
