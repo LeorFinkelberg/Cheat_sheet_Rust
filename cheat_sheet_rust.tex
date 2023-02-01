@@ -855,6 +855,7 @@ Rust отличается от других языков, поддерживаю
 
 Использование \texttt{new()} -- соглашение, принятое в сообществе Rust. В отличие от других языков, \texttt{new} не является ключевым словом и не имеет какого-либо особого статуса по сравнению с другими методами
 \begin{lstlisting}[
+title = {Использование блока impl для добавления методов к структуре},
 style = c_cpp,
 numbers = none
 ]
@@ -883,6 +884,201 @@ fn main() {
     println!("{} is {} bytes long", f3_name, f3_length);
 }
 \end{lstlisting}
+
+В Rust небезопасность означает <<тот же уровень безопасности, который всегда обеспечивается языком С>>.
+
+Небольшие дополнения к языку Rust:
+\begin{itemize}
+	\item Изменяемые глобальные переменные обозначаются с помощью \verb|static mut|,
+	
+	\item По соглашению в именах глобальных переменных ВСЕ БУКВЫ ЗАГЛАВНЫЕ,
+	
+	\item Ключевое слово \texttt{const} включается для тех значений, которые никогда не изменяются.
+\end{itemize}
+
+Опытным программистам известно, что использование глобальной переменной \texttt{errno} во время системных вызовов обычно регулируется операционной системой. Как правило, в Rust такой стиль программирования не приветствуется, поскольку при нем не только нарушается безопасность типов (ошибки кодируются в виде простых целых чисел), но и в <<награду>> неравдивым программистам, забывающим проверить значение переменной \texttt{errno}, может проявиться нестабильность программ.
+
+\paragraph{Разница между \texttt{const} и \texttt{let}} Данные, определяемые с \texttt{let}, могут изменяться. Rust позволяет типам обладать явно противоречивым свойством \emph{внутренней изменчивости}.
+
+Некоторые типы, например \verb|std::sync::Arc| и \verb|std::rc::Rc|, представляют собой неизменяемый фасад, но по прошествии времени изменяют свое внутренее состояние. По мере того, как на них делаются ссылки, они увеличивают значение счетчика ссылок и уменьшают его значение, когда срок действия этих ссылок истекает.
+
+На уровне компилятора \texttt{let} больше относится к использованию псевдонимов, чем к неизменяемости. Использование псевдонимов в понятиях компилятора означает одновременное наличие нескольких ссылок на одно и то же место в памяти.
+
+Ссылки на переменные, доступные только для чтения (их заимствования), объявленные с помощью \texttt{let}, могут указывать на одни и те же данные. Ссылки для чтения-записи (изменяемые заимствования) гарантированно никогда не станут псевдонимами данных.
+
+\subsection{Использование возвращаемого типа Result}
+
+Подход, принятый в Rust к обработке ошибок, заключается в использовании типа, который соответствует как стандартному случаю, так и случаю ошбики. Этот тип известен как \texttt{Result}. У него два состояния: \texttt{Ok} и \texttt{Err}.
+
+Для вызова функций, возвращающих \texttt{Result<File, String>}, требуется дополнительный метод \verb|unwrap()|, позволяющий извлечь значение. Вызов \verb|unwrap()| снимает оболочку с \verb|Ok(File)| для создания \verb|File|. При обнаружении ошибки \verb|Err(String)| прогрмма даст сбой.
+
+\texttt{Result} -- перечисление \texttt{enum}. Перечисление \texttt{enum} -- это тип, способный представлять несколько известных вариантов, например
+\begin{lstlisting}[
+style = c_cpp,
+numbers = none
+]
+enum Suit {
+    Clubs,
+    Spades,
+    Diamonds,
+    Hearts,
+}
+
+enum Card {
+    King(Suit),
+    Queen(Suit),
+    Jack(Suit),
+    Ace(Suit),
+    Pip(Suit, usize),
+}
+\end{lstlisting}
+
+Как и структуры, \emph{перечисления} поддерживают \emph{методы} через блоки \texttt{impl}. Перечисления в Rust эффективнее набора констант.
+
+Определение основных характеристик типажа Read для File
+\begin{lstlisting}[
+style = c_cpp,
+numbers = none
+]
+#![allow(unused_variables)]
+
+// структура 
+#[derive(Debug)]
+struct File;
+
+// типаж для структуры File, задающий протокол
+trait Read {
+	fn read( // этот метод должен быть реализован в блоке impl
+		self: &Self, // пседотип
+		save_to: &Vec<u8>,
+	) -> Result<usize, String>;
+}
+
+// имплементация
+impl Read for File {
+	fn read(
+	self: &File,
+	save_to: &Vec<u8>,
+	) -> Result<usize, String> {
+		Ok(0)
+	}
+}
+
+fn main() {
+	let f = File{};
+	let mut buffer = vec![];
+	let n_bytes = f.read(&mut buffer).unwrap();
+	
+	println!("{} byte(s) read from {:?}", n_bytes, f);
+}
+\end{lstlisting}
+
+\texttt{Display} требует, чтобы в типах был реализован метод \texttt{fmt}, возвращающий \texttt{fmt::Result}
+\begin{lstlisting}[
+style = c_cpp,
+numbers = none
+]
+// типаж (протокол/контракт/интерфейс) Display требует,
+// чтобы в типе был реализован метод fmt
+impl Display for FileState {
+    fn fmt(
+        &self,
+        f: &mut fmt::Formatter,
+    ) -> fmt::Result {
+        match *self {
+            FileState::Open => write!(f, "OPEN"),
+            FileState::Closed => write!(f, "CLOSED"),
+        }
+    }
+}
+
+// типаж (протокол/контракт/интерфейс) Display требует,
+// чтобы в типе был реализован метод fmt
+impl Display for File {
+    fn fmt(
+        &self,
+        f: &mut fmt::Formatter,
+    ) -> fmt::Result {
+        write!(f, "<{} ({})>", self.name, self.state)
+    }
+}
+\end{lstlisting}
+
+Rust'ие перечисления напоминают Python'ие именованные кортежи
+\begin{lstlisting}[
+style = ironpython,
+numbers = none
+]
+# Rust
+# enum FileState {
+#    Open,
+#    Closed
+# }
+from collection import namedtuple
+
+attrs = ("open", "closed")
+FileState = namedtuple("FileState", attrs)(*attrs)
+FileState.open # 'open'
+FileState.closed # 'closed'
+\end{lstlisting}
+
+Для сборки документации проекта без зависимостей
+\begin{lstlisting}[
+style = bash,
+numbers = none
+]
+$ cargo doc --no-deps --open
+\end{lstlisting}
+
+Группа символов \verb|///| приводит к созданию документов, ссылающихся на элемент, который следует непосредственно за ней
+\begin{lstlisting}[
+style = c_cpp,
+numbers = none
+]
+/// Represents a "file",
+/// which probaly lives on a file system.
+#[derive(Debug)]
+pub struct File {
+    name: String,
+    data: Vec<u8>,
+}
+
+impl File {
+    /// New files are assumed to be empty, but a name is required.
+    pub fn new(name: &str) -> File {
+         File {
+             name: String::from(name),
+             data: Vec::new(),
+         }
+    }
+}
+\end{lstlisting}
+
+Можно приемы форматирования текста на Markdown
+\begin{lstlisting}[
+numbers = none
+]
+...
+impl File {
+    /// Creates a new, empty `File`.
+    ///
+    /// #*Examples*
+    /// ```
+    /// let f = File::new("f1.txt");
+    /// ```
+    pub fn new(name: &str) -> File {
+        File {
+            name: String::from(name),
+            data: Vec::new(),
+        }
+    }
+}
+\end{lstlisting}
+
+Строки, начинающиеся с \verb|///| попадут в документацию. То есть это что-то вроде Python'их doc-strings.
+
+С группы символов \verb|//!| начинается описание проекта.
+
 
 
 
