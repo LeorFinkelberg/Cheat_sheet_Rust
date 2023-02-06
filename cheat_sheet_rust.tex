@@ -1250,8 +1250,240 @@ impl CubeSat {
 
 Вместо использования долгоживующих объектов стоит подумать о создании недолговечных отдельных объектов. Иногда проблемы, связанные с владением, можно решить за счет пересмотра конструкций всей программы.
 
+\begin{lstlisting}[
+style = c_cpp,
+numbers = none
+]
+impl GroundStation {
+    fn send(
+        &self,
+        mailbox: &mut Mailbox,
+        to: &CubeSat,
+        msg: Message,
+    ) {
+        mailbox.post(to, msg);
+    }
+}
+
+impl CubeSat {
+    fn recv(
+        &self,
+        mailbox: &mut Mailbox,
+    ) -> Option<Message> {
+        mailbox.deliver(&self)
+    }
+}
+
+impl Mailbox {
+    fn post(
+        &mut self,  // изменяемый доступ к самому себе
+        msg: Message  // владение сообщением
+    ) {
+        self.message.push(msg);
+    }
+
+    fn deliver(
+        &mut self,
+        recipient: &CubeSat
+    ) -> Option<Message> {
+        for i in 0..self.message.len() {
+            if self.messages[i].to == recipient.id {
+                let msg = self.messages.remove(i);
+                return Some(msg);
+            }
+        }
+        None
+    }
+}
+\end{lstlisting}
+
+\begin{lstlisting}[
+title = {\sffamily Реализации стратегии недолговечных переменных},
+style = c_cpp,
+numbers = none
+]
+#![allow(unused_variables)]
+
+#[derive(Debug)]
+struct CubeSat {
+    id: u64
+}
+
+#[derive(Debug)]
+struct Mailbox {
+    messages: Vec<Message>,
+}
+
+#[derive(Debug)]
+struct Message {
+    to: u64,
+    content: String,
+}
+
+struct GroundStation {}
+
+impl Mailbox {
+    fn post(
+        &mut self,  // метод будет изменять экземпляр Mailbox
+        msg: Message
+    ) {
+        self.messages.push(msg);
+    }
+
+    fn deliver(
+        &mut self,  // метод будет изменят экземпляр Mailbox
+        recipient: &CubeSat
+    ) -> Option<Message> {
+        for i in 0..self.messages.len() {
+            if self.messages[i].to == recipient.to {
+                let msg = self.messages.remove(i);
+                return Some(msg);
+            }
+        }
+        None
+    }
+}
+
+impl GroundStation {
+    fn connect(&self, sat_id: u64) -> CubeSat {
+        CubeSat {
+            id: sat_id,
+        }
+    }
+
+    fn send(
+        &self, // доступ на чтение GroundStation
+        mailbox: &mut Mailbox,  // экземпляр Mailbox будет изменяться
+        msg: Message
+    ) {
+        mailbox.post(msg);
+    }
+}
+
+impl CubeSat {
+    fn recv(
+        &self,  // доступ только на чтение CubeSat
+        mailbox: &mut Mailbox  // экземпляр Mailbox будет изменяться
+    ) -> Option<Message> {
+        mailbox.deliver(&self)
+    }
+}
+
+fn fetch_sat_ids() -> Vec<u64> {
+    vec![1, 2, 3]
+}
+
+fn main() {
+    let mut mail = Mailbox { messages: vec![] };
+    
+    let base = GroundStation {};
+    
+    let sat_ids = fetch_sat_ids();
+    
+    for sat_id in sat_ids {
+        let sat = base.connect(sat_id);
+        let msg = Message { to: sat_id, content: String::from("hellow")};
+        base.send(&mut mail, msg);
+    }
+
+    let sat_ids = fetch_sat_ids();
+    
+    for sat_id in sat_ids {
+        let sat = base.connect(sat_id);
+        
+        let msg = sat.recv(&mut mail);
+        println!("{:?}: {:?}", sat, msg);
+    }
+}
+\end{lstlisting}
+
+На Python код выглядел бы так
+\begin{lstlisting}[
+style = ironpython,
+numbers = none
+]
+import typing as t
+from dataclasses import dataclass, field
+
+# В поисках типов код просматривается сверху вниз, поэтому
+# приходится вводить служебные типы
+_CubeSat = t.NewType("_CubeSat", type)
+_Mailbox = t.NewType("_Mailbox", type)
+
+# В Rust это `struct Message`
+class Message(t.NamedTuple):
+	to: int  # поле
+	content: str  # поле
+
+# В Rust это `struct Mailbox` и `impl Mailbox`
+@dataclass(frozen=False)
+class Mailbox:
+	# В Rust это блок struct
+	messages: t.List[_Message] = field(default_factory=list)  # NB!
+
+	# В Rust это блок impl
+	def post(self, msg: _Message) -> t.NoReturn:
+		# Доступ к полю messages экземпляра через self
+		self.messages.append(msg)  # эта инструкция изменяет экземпляр дата-класса
+
+	def delivier(self, recipient: _CubeSat) -> t.Optional[Message]:
+		for i in range(len(self.messages)):
+			if self.messages[i].to == recipient.id:
+				msg = self.messages.pop(i)  # эта инстукция изменяет экземпляр дата-класса
+				return msg
+
+		return None
+
+# В Rust это `struct CubeSat` и `impl CubeSat`
+@dataclass(frozen=False)
+class CubeSat:
+	id: int  # поле
+
+	def recv(self, mailbox: _Mailbox) -> t.Optional[Message]:
+		return mailbox.delivier(self)
+
+def fetch_sat_ids() -> t.List[int]:
+	return [1, 2, 3]
+
+# В Rust это `struct GroundStation` и `impl GroundStation`
+@dataclass(frozen=False)
+class GroundStation:
+	# В Rust это блок impl
+	def connect(self, sat_id: int) -> CubeSat:
+		return CubeSat(id=sat_id)
+
+	def send(self, mailbox: _Mailbox, msg: Message):
+		return mailbox.post(msg)
 
 
+def main():
+	mail = Mailbox()
+	base = GroundStation()
+	sat_ids = fetch_sat_ids()
+
+	for sat_id in sat_ids:
+		sat = base.connect(sat_id)
+		msg = Message(to=sat_id, content="hello")
+		base.send(mail, msg)
+
+	sat_ids = fetch_sat_ids()
+	for sat_id in sat_ids:
+		sat = base.connect(sat_id)
+		msg = sat.recv(mail)
+		print(f"{sat}: {msg}")
+
+
+if __name__ == "__main__":
+	main()
+\end{lstlisting}
+
+Экземпляр сообщения \texttt{Message} не изменяется после создания, поэтому его можно представить простым именованным кортежем, а не дата-классом. \texttt{Mailbox} приходится представлять дата-классом, потому что поле \texttt{messages} изменяемое. Причем это поле нужно создавать обязательно как \verb|default_factory=list|, чтобы безопасно инициализировать поле экзмепляра пустым списком
+\begin{lstlisting}[
+style = ironpython,
+numbers = none
+]
+messages: t.List[Message] = field(default_factory=list)
+\end{lstlisting}
 
 
 
