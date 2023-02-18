@@ -1798,6 +1798,149 @@ println!("{} + {} = {}", a, b, result);
 
 В куче значения переменных вряд ли будут располагаться рядом друг с другом. Более того, доступ к данным \emph{\color{red}в куче невозможен без разыменования указателя}.
 
+\section{Файлы и хранилища}
+
+\begin{lstlisting}[
+style = c_cpp,
+numbers = none
+]
+use std::fs::File;
+use std::io::prelude::*;
+use std::env;
+
+const BYTES_PER_LINE: usize = 16;
+
+fn main() {
+	// ввод не проверяется!!!
+    let arg1 = env::args().nth(1);
+    
+    let fname = arg1.expect("usage: fview FILENAME");
+    
+    let mut f = File::open(&fname).expect("Unable to open file");
+    let mut pos = 0;
+    let mut buffer = [0; BYTES_PER_LINE];
+    
+    while let Ok(_) = f.read_exact(&mut buffer) {  // f --data--> buffer
+        print!("[0x{:08x}] ", pos);
+        for byte in &buffer {
+            match *byte {
+                0x00 => print!(". "),
+                0xff => print!("## "),
+                _ => print!("{:02x} ", byte),
+            }
+        }
+    
+        println!("");
+        pos += BYTES_PER_LINE;
+    }
+}
+\end{lstlisting}
+
+\verb|while let Ok(_) {...}| -- с помощью этой структуры управление ходом выполнения программы цикл продолжается до тех пор, пока \verb|f.read_exact()| не вернет \verb|Err|, что случится, когда закончатся байты для чтения.
+
+\verb|f.read_exact()| -- метод из типажа \verb|Read|, передающий данные из источника (в данном случае \verb|f|) в буфер, предоставленный в качестве аргумента. Его работа завершиться при заполнении буфера.
+
+Каждый метод итератора \verb|nth()| возвращает \verb|Option|. Когда $ n $ превышает длину итератора, возвращается \verb|None|. Для обработки значений \verb|Option| используются вызовы метода \verb|expect()|.
+
+Метод \verb|expect()| считается более удобной версией метода \verb|unwrap()|. Метод \verb|expect()| получает в качестве аргумента сообщение об ошибке, а метод \verb|unwrap()| просто внезапно впадает в панику.
+
+\subsection{Файловые операции, проводимые в Rust}
+
+Основной тип для работы с файловой системой -- \verb|std::fs::File|. Для создания файла доступны два метода: \verb|open()| и \verb|create()|. Если известно, что файл уже существует, то используется \verb|open()|.
+
+Если нужен более жесткий контроль, то используетвся функция \verb|std::fs::OpenOptions|.
+
+\subsection{Безопасное взаимодействие с файловой системой}
+
+В стандартной библиотеке Rust существуют типобезопасные варианты \verb|str| и \verb|String|: \verb|std::path::Path| и \verb|std::path::PathBuf|
+\begin{lstlisting}[
+style = c_cpp,
+numbers = none
+]
+let hello = PathBuf::from("/tmp/hello.txt");
+hello.extension();
+\end{lstlisting}
+
+Если разбираться с тонкостями реализации \verb|std::fs::Path| и \verb|std::fs::PathBuf|, то выясниться, что они, соответственно, являются надстройками над \verb|std::ffi::OsStr| и \verb|std::ffi::OsString|. То есть, \verb|Path| и \verb|PathBuf| не гарантируют совместимости с UTF-8.
+
+\subsection{Реализация хранилища <<ключ-значение>> с архитектурой, структурированной по записям и доступом только для добавления}
+
+\emph{Шаблон библиотеки} можно создать так
+\begin{lstlisting}[
+style = bash,
+numbers = none
+]
+cargo new --lib actionkv
+\end{lstlisting}
+
+\begin{lstlisting}[
+title = {\sffamily Cargo.toml},
+style = bash,
+numbers = none
+]
+[package]
+name = "actionkv"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+betyorder = "1.2"
+crc = "1.7"
+
+[lib]  # в контейнере может быть только одна библиотка
+name = "libactionkv" # имя создаваемой библиотеки
+path = "src/lib.rs"
+
+[[bin]] # [[...]] -- раздел можно повторять
+name = "akv_mem"
+path = "src/akv_mem.rs"
+\end{lstlisting}
+
+Раздел \verb|[[bin]]|, которых может быть много, определяет \emph{исполняемый файл}, созданный из этого контейнера. Синтаксис двойной скобки необходим, поскольку он четко описывает \verb|bin| как раздел, имеющий один или несколько элементов.
+
+Открытый API-интерфейс actionkv состоит из четырех операций: получения, удаления, вставки и обновления.
+
+\subsubsection{Настройка продукта условной компиляции}
+
+В Rust предоставляются широкие возможности изменнения \emph{продукта компиляции} в зависимости от заданной компилятору \emph{целевой архитектуры}. Как правило, речь идет о \emph{целевой операционной системе}, но можно воспользоваться и возможностями, предоставляемыми целевым процессором. Изменение продукта компиляции в зависимости от заданных условий самого процесса компиляции называют \emph{условной компиляцией}
+\begin{lstlisting}[
+style = c_cpp,
+numbers = none
+]
+#[cfg(target_os = "windows")]
+const USAGE: &str = "
+Usage:
+    akv_mem.exe FILE get KEY
+    akv_mem.exe FILE delete KEY
+    akv_mem.exe FILE insert KEY VALUE
+    akv_mem.exe FILE update KEY VALUE
+";
+
+#[cfg(not(target_os = "windows"))]
+const USAGE: &str = "
+Usage:
+    ...
+";
+...
+\end{lstlisting}
+
+{\color{blue}
+Для добавления в проект условной компиляции нужно аннотировать исходный код атрибутами \verb|cfg|. Атрибут \verb|cfg| работает вместе с целевым параметром, предоставляемым \verb|rustc| в ходе компиляции \cite[\strbook{296}]{mcnamara-rust-in-action:2023}.
+}
+
+Для предоставления в коде двух определений \verb|const USAGE| используется условная компиляция. Когда проект создается под Windows, строка использования содержит расширение файла \verb|.exe|. В получаемые на выходе двоичные файлы включаются только те данные, которые имеют отношение к их целевому назначению.
+
+Для отрицания следует использовать выражение \verb|#cfg(not(...))|. Для сопоставления с элементами списка доступны также выражения \verb|#[cfg(all(...))]| и \verb|#[cfg(any(...))]|. Кроме всего этого, атрибуты \verb|cfg| можно настроить при вызове \verb|cargo| или \verb|rustc| с помощью аргумента командной строки \verb|--cfg ATTRIBUTE| \cite[\strbook{297}]{mcnamara-rust-in-action:2023}.
+
+В Rust при проведении операций с файлами может возвращаться ошибки типа \verb|std::io::ErrorKind::UnexpectedEof|. EOF -- это нулевой байт (\verb|0u8|).
+
+При чтении данных из файла операционная система сообщает приложению о количестве байтов, успешно считаных из хранилища. Если успешного считывания байтов с диска не произошло и при этом не возникла никакая ошибочная ситуация, то операционная система, а стало быть, и приложение, предполагают, что достигнут конец файла -- EOF.
+
+
+
+
 
 
 
@@ -1810,6 +1953,8 @@ println!("{} + {} = {}", a, b, result);
 % Источники в "Газовой промышленности" нумеруются по мере упоминания 
 \begin{thebibliography}{99}\addcontentsline{toc}{section}{Список литературы}
 	\bibitem{koltzov-c-lang:2019}{ \emph{Кольцов Д.М.} Си на примерах. Практика, практика и только практика. -- СПб.: Наука и Техника, 2019. -- 288 с.}
+	
+	\bibitem{mcnamara-rust-in-action:2023}{\emph{Макнамара Т.} Rust в действии. -- СПб.: БХВ-Петербург, 2023. -- 528 с.}
 \end{thebibliography}
 
 %\listoffigures\addcontentsline{toc}{section}{Список иллюстраций}
