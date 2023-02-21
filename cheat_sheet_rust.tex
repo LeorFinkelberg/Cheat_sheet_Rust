@@ -1938,6 +1938,195 @@ Usage:
 
 При чтении данных из файла операционная система сообщает приложению о количестве байтов, успешно считаных из хранилища. Если успешного считывания байтов с диска не произошло и при этом не возникла никакая ошибочная ситуация, то операционная система, а стало быть, и приложение, предполагают, что достигнут конец файла -- EOF.
 
+Хеш-функция -- отображение значений переменной длины на значения фиксированной длины. На практике значение, возвращаемое хеш-функцией. является целым числом.
+
+Базовая хеш-функция для \verb|&str|, которая просто интерпретирует первый символ строки как целое число без знака. То есть первый символ строки используется этой функцией в качестве хеш-значения
+\begin{lstlisting}[
+style = c_cpp,
+numbers = none
+]
+fn basic_hash(
+    key: &str  // любое строковое значение
+) -> u32 {
+    let first = key.chars()
+                    .next()  // -> значение типа Option: Some(char) | None
+                    .unwrap_or('\0');
+    unsafe {
+        std::mem::transmute::<char, u32>(first)
+    }
+}
+\end{lstlisting}
+
+Итератор \verb|.chars()| преобразует строку в серию символьных значений, каждое длиной 4 байта. \verb|.next()| возвращает значение типа \verb|Option| с распаковкой либо в \verb|Some(char)|, либо, для пустых строк, в \verb|None|. 
+
+Функция \verb|unwrap_or()| ведет себя как \verb|unwrap()|, но при встрече с \verb|None| не паникует, а предоставляет значение.
+
+Если несколько входных параметров начинаются с одного и того же символа, на выходе будет одинаковый результат. Такое происходит всякий раз, когда бесконечное пространство входных параметров отображается на конечное пространство, но в данном случае это имеет крайне негативные последствия.
+
+Хеш-таблицы, включая имеющуюся в Rust карту \verb|HashMap|, справляются с этой особенностью, которую называют хеш-коллизией. Для ключей с одинаковым хеш-значением в этих таблицах предоставляется место для резервных копий. Обычно это резервное хранилище относится к типу \verb|Vec<T>|, и называется хранилищем коллизий. При вознинковении коллизий выполняется обращение к хранилищу коллизий и происходит его сквозное сканирование. По мере увеличения хранилища это линейное сканирование занимает все больше и больше времени.
+
+Буквальный синтаксис в стандартной библиотеке Rust для \verb|HashMap| не предоставляется. 
+\begin{lstlisting}[
+style = c_cpp,
+numbers = none	
+]
+use std::collections::HashMap;
+
+fn main() {
+    let mut capitals = HashMap::new();  // создаем экземпляр 'словаря' {}
+    
+    capiatls.insert("Cook Islands", "Avarua");
+    capitals.insert("Fiji", "Suva");
+    capitals.insert("Kiribati", "South Tarawa");
+    capitals.insert("Niue", "Alofi");
+    capitals.insert("Tonga", "Nuku'alofa");
+    
+    let tonga_capital = capitals["Tonga"];
+    // Или так
+    // let tonga_capital = capitals.get("Tonga").expect("Oops");
+    println!("Capital of Tonga is: {}", tongan_capital);
+}
+\end{lstlisting}
+
+В Python можно было бы сделать так
+\begin{lstlisting}[
+style = ironpython,
+numbers = none
+]
+capitals: t.Dict[str, str] = {}
+
+capitals.update(**{"Cook Islands", "Avarua"})
+capitlas["Fiji"] = "Suva"
+...
+tonga_capital = captials["Tonga"]
+tonga_capital = capitals.get("Tonga", None)
+\end{lstlisting}
+
+При поддержке расширенной экосистемы Rust имеется возможность вставки JSON-строк в код Rust
+\begin{lstlisting}[
+style = c_cpp,
+numbers = none
+]
+#[macro_use]  // использование макросов контейнера serde_json
+extern crate serde_json;
+
+fn main() {
+    let capitals = json!({
+        "Cook Islnads": "Avarua",
+        "Fiji": "Suva",
+    });
+
+    println!("Capital of Tonga is: {}", capitals["Tonga"]);
+}
+\end{lstlisting}
+
+\verb|capitals["Tonga"]| возвращает ссылку на значение, предназначенную \emph{только для чтения}.
+
+NB: используйте \verb|HashMap|, пока не будет веских оснований для использования \verb|BTreeMap|. Структура \verb|BTreeMap| работает быстрее, если ключи обладают естественной упорядоченностью и ваше приложение пользуется таким их расположением.
+
+\begin{itemize}
+	\item \verb|std::collections::HashMap| (с хеш-функцией \verb|SipHash|): вариант, обладающий криптографической безопасностью и устойчивостью к атакам типа <<отказ в обслуживании>>, но работающий медленее других хеш-функций.
+	
+	\item \verb|std::collections::BTreeMap|: вариант, более подходящий \emph{для ключей с естественной упорядоченностью}, где согласованность кеша может обеспечить ускорение работы.
+\end{itemize}
+
+\section{Работа в сети}
+
+\emph{Типажные объекты} являются посредниками конкретных типов. Синтаксис \verb|Box<dyn std::error::Error>| означает \verb|Box| (указатель) на \emph{любой тип} с реализацией \verb|std::error::Error|.
+
+\emph{Типажные объекты} добавляют в Rust форму \emph{полиморфизма}, то есть допускают посредством \emph{динамической диспетчеризации} совместное использование интерфейса сразу несколькими типами. А \emph{обобщения} допускают \emph{полиморфизм} посредоством \emph{статической диспетчеризации}. Выбор между обобщением и типажными объектами обычно основывается на компромиссах между дисковым пространством и временем:
+\begin{itemize}
+	\item Обобщения используют больше дискового пространства и характеризуются более высоким темпом выполнения программы.
+	
+	\item Типажные объекты занимают меньше дискового пространства, но из-за косвенности указателя влекут за собой незначительные издержки времени выполнения.
+\end{itemize}
+
+Типажные объекты существуют в трех формах:
+\begin{itemize}
+	\item \verb|&dyn Trait|: заимствуется,
+	
+	\item \verb|&mut dyn Trait|: заимствуется,
+	
+	\item \verb|Box<dyn Trait>|: находится в чьем-то владении.
+\end{itemize}
+
+\begin{lstlisting}[
+title = {\sffamily Использование типажного объекта \texttt{\&dyn Enchanter}},
+style = c_cpp,
+numbers = none
+]
+use rand;
+use rand::seq::SliceRandom;
+use rand::Rng;
+
+#[derive(Debug)]
+struct Dwarf {};
+
+#[derive(Debug)]
+struct Elf {};
+
+#[derive(Debug)]
+struct Human {};
+
+#[derive(Debug)]
+enum Thing {
+    Sword,
+    Trinket,
+}
+
+trait Enchanter: std::fmt::Debug {
+	// self -- это структура, к которой будет подмешан этот типаж
+    fn competency(&self) -> f64; // абстрактный метод
+    
+    fn enchant(&self, thing: &mut Thing) {
+        let probability_of_success = self.competency();
+        let spell_is_successful = rand::thread_rng().gen_bool(probability_of_success);
+        
+        print!("{:?} mutters incoherently. ", self); // self можно вывести на печать благодаря std::fmt::Debug
+        if spell_is_successful {
+            println!("The {:?} glows brightly.", thing);
+        } else {
+            println!("The {:?} fizzes, \
+                then turns into a worthless trinket.", thing);
+        }
+    }
+}
+
+// реализация методов для структуры Dwarf по протоколу Enchanter
+impl Enchanter for Dwarf {
+    fn competency(&self) -> f64 {
+        0.5
+    }
+}
+
+// реализация методов для структуры Elf по протоколу Enchanter
+impl Enchanter for Elf {
+    fn competency(&self) -> f64 {
+         0.95
+    }
+}
+
+// реализация методов для структуры Human по протоколу Enchanter
+impl Enchanter for Human {
+    fn competency(&self) -> f64 {
+        0.8
+    }
+}
+
+fn main() {
+    let mut it = Thing::Sword;
+    
+    let d = Dwarf {};
+    let e = Elf {};
+    let h = Human {};
+    
+    let party: Vec<&dyn Enchanter> = vec![&d, &e, &h];  // тиажный объект
+    // метод choose() берется из типажа rand::seq::SliceRandom
+    let spellcaster = party.choose(&mut rand::thread_rng()).unwrap();
+    
+    spellcaster.enchant(&mut it);
+}
+\end{lstlisting}
 
 
 
