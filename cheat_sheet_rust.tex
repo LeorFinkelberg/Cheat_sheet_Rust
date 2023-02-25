@@ -2281,6 +2281,84 @@ fn main() -> Result<(), Box<dyn Error>> {
 
 {\color{red}Необходимость заключения \emph{типажных объектов} в \verb|Box| обуславливается тем, что их \emph{размер} (в байтах в стеке) \emph{на момент компиляции не известен}.} У \verb|Box| есть известный размер в стеке. {\color{blue}И смысл его применения заключается в том, чтобы \emph{указывать} на то, для чего этот \emph{размер неизвестен}, в том числе и на типажные объекты.}
 
+Использование типажных объектов известно также как затирание типов. При этом Rust теряет сведения о том, что ошибка берет свое начало в вышестоящих контейнерах.
+
+Использование \verb|Box<dyn Error>| в качестве варианта ошибки, закладываемого в \verb|Result|, означает, что \emph{вышестоящие типы ошибок} в некотором смысле \emph{теряются}. {\color{blue}Исходные ошибки теперь перобразуются в один и тот же тип.}
+
+Функция \verb|map_err()| отображает ошибку на функцию. В качестве функции могут использоваться варианты перечисления. Оператор \verb|?| ставится в самом конце. Иначе функция может возвратить управление еще до того, как у кода будет возможность преобразовать ошибку.
+
+\begin{lstlisting}[
+title = {\sffamily Заключение вышестоящих ошибок в оболочку нашего собственного типа},
+numbers = none
+]
+use std::io;
+use std::fmt;
+use std::net;
+use std::fs::File;
+use std::net::Ipv6Addr;
+
+#[derive(Debug)]
+enum UpstreamError {
+    IO(io::Error),
+    Parsing(net::AddrParseError),
+}
+
+// реализация метода fmt для перечисления UpstreamError
+// в соответствии с типажом Display
+impl fmt::Display for UpstreamError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
+
+// реализация всех нужных для работы методов
+// в соответствии с типажом Error
+impl error::Error for UpstreamError { }
+
+fn main() -> Result<(), UpstreamError> {
+    let _f = File::open("invisible.txt")
+        .map_err(UpstreamError::IO)?;
+        
+    let _localhost = "::1"
+        .parse::<Ipv6Addr>()
+        .map_err(UpstreamError::Parsing)?;
+        
+    Ok(())
+}
+\end{lstlisting}
+
+Можно также избавиться от вызова \verb|map_err()|. Но для этого нужна реализация типажа \verb|From|. Типаж \verb|std::convert::From| располагает единственным необходимым метдом \verb|from()|. Чтобы придать нашим двум вышестоящим типам ошибок возможность подвергаться преобразованиям, нужны два блока \verb|impl|
+\begin{lstlisting}[
+style = c_cpp,
+numbers = none
+]
+impl From<io::Error> for UpstreamError {
+    fn from(error: io::Error) -> Self {
+         UpstreamError::IO(error) // io::Error -> UpstreamError
+    }
+} 
+
+impl From<net::AddrParseError> for UpstreamError {
+    fn from(error: net::AddrParseError) -> Self {
+        UpstreamError::Parsing(error) // net::AddrParseError -> UpstreamError
+    }
+}
+\end{lstlisting}
+
+Теперь функция \verb|main()| возвращается в присущую ей простую форму
+\begin{lstlisting}[
+style = c_cpp,
+numbers = none,
+]
+fn main() -> Result<(), UpstreamError> {
+    let _f = File::open("invisible.txt")?;
+    let _localhost = "::1".parse::<Ipv6Addr>()?;
+    
+    Ok(())
+}
+\end{lstlisting}
+
+
 
 
 
