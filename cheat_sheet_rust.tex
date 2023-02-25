@@ -2143,6 +2143,144 @@ fn main() {
 \emph{Типажные объекты} ближе к \emph{миксинам}. Типажные объекты не существуют самы по себе, они -- агенты какого-то другого типа.
 }
 
+Номера портов -- это чисто виртуальные понятия. Это просто значения типа \verb|u16|. Номера портов позволяют по одному и тому же IP-адресу размещать сразу несколько служб.
+
+Утилита командной строки, предназначенная для разрешения IP-адресов из имен хостов
+\begin{lstlisting}[
+style = c_cpp,
+numbers = none
+]
+use std::net::{SocketAddr, UdpSocket};
+use std::time::Duration;
+
+use clap::{App, Arg};
+use rand;
+use trust_dns::op::{Message, MessageType, OpCode, Query};
+use trust_dns::rr::domain::Name;
+use trust_dns::rr::record_type::RecordType;
+use trust_dns::serialize::binary::*;
+
+fn main() {
+    let app = App::new("resolve")
+        .about("A simple to use DNS resolver")
+        .arg(Arg::with_name("dns-server").short("s").default_value("1.1.1.1"))
+        .arg(Arg::with_name("domain-name").required(true))
+        .get_matches();
+        
+    let domain_name_raw = app
+        .value_of("domain-name").unwrap();
+    let domain_name = Name::from_ascii(&domain_name_raw).unwrap();
+    
+    let dns_server_raw = app.value_of("dns-server").unwrap();
+    let dsn_server: SockerAddr = format!("{}:53", dns_server_raw)
+        .parse()
+        .expect("invalid address");
+        
+    let mut request_as_bytes: Vec<u8> = Vec::with_capacity(512);
+    let mut response_as_bytes: Vec<u8> = vec![0; 512];
+    
+    let mut msg = Message::new();
+    msg
+        .set_id(rand::random::<u16>())
+        .set_message_type(MessageType::Query)
+        .add_query(Query::query(domain_name, RecordType::A))
+        .set_op_code(OpCode::Query)
+        .set_recursion_desired(true);
+        
+    let mut encoder = 
+        BinEncoder::new(&mut request_as_bytes);
+        msg.emit(&mut encoder).unwrap();
+        
+    let localhost = UdpSocket::bind("0.0.0.0:0")
+        .expect("cannot bind to local socket");
+    let timeout = Duration::from_secs(3);
+    localhost.set_read_timeout(Some(timeout)).unwrap();
+    localhost.set_nonblocking(false).unwrap();
+    
+    let _amt = localhost
+        .send_to(&request_as_bytes, dns_server)
+        .expect("socket misconfigured");
+        
+    let (_amt, _remote) = localhost
+        .recv_from(&mut response_as_bytes)
+        .expect("timeout reached");
+        
+    let dns_message = Message::from_vec(&response_as_bytes)
+        .expect("unable to parse response");
+        
+    for answer in dns_message.answers() {
+         if answer.record_type() == RecordType::A {
+              let resource = answer.rdata();
+              let ip = resource
+                  .to_ip_addr()
+                  .expect("invalid IP address received");
+              println!("{}", ip.to_string());
+         }
+    }
+}
+\end{lstlisting}
+
+\verb|"0.0.0.0:0"| -- прослушивание всех адресов на произвольном порту. Конкретный порт выбирается операционной системой.
+
+\verb|Vec::with_capacity(512)| создает \verb|Vec<T>| {\color{red}с длиной 0} и емкостью 512, \verb|vec![0; 512]| создает \verb|Vec<T>| с длиной 512 и емкостью 512.
+
+\subsection{Способы обработки ошибок, наиболее удобные для помещения в библиотеки}
+
+Возвращение \verb|Result<T, E>| успешно работает только при наличии одного типа ошибок \verb|E|. Но, как только возникает потребность возвращения нескольких типов ошибок, ситуация резко усложняется.
+
+{
+При работе с отдельными файлами код лучше компилировать с помощью команды \verb|rustc <file_name>|, отказавшись от использования \verb|cargo build|. Например, если файл называется \verb|io-error.rs|, то в командной строке оболочки следует набрать \verb|rustc io-error.rs && ./io-error[.exe]|.
+}
+
+Оператор \verb|?| это удобная синтаксическая замена макросу \verb|try!|, выполняющему две функции:
+\begin{itemize}
+	\item При обнаружении \verb|Ok(value)| это выражение вычисляется в значение \verb|value|,
+	
+	\item при обнаружении \verb|Err(err)|, \verb|try!| или \verb|?| выполняет возвращение сразу же после попытки преобразования \verb|err| в тип \verb|error|, определение которого находится в вызывающей функции.
+\end{itemize}
+
+В Rust-подобном псевдокоде макрос \verb|try!| можно определить следующим образом
+\begin{lstlisting}[
+style = c_cpp,
+numbers = none
+]
+macro try {
+    match expression {
+        Result::Ok(val) => val,
+        Result::Err(err) => {
+           let converted = convert::From::from(err);
+           return Result::Err(converted);
+        }
+    }
+}
+\end{lstlisting}
+
+\begin{lstlisting}[
+title = {\sffamily Использование типажного объекта в возвращаемом значении},
+style = c_cpp,
+numbers = none
+]
+use std::fs::File;
+use std::error::Error;
+use std::net::Ipv6Addr;
+
+// типажный объект "обобщает" типы Error и AddrParseError
+fn main() -> Result<(), Box<dyn Error>> {
+    let _f = File::open("invisible.txt")?; // тип ошибки std::io::Error
+    
+    let _localhost = "::1"
+        .parse::<Ipv6Addr>()? // тип ошибки std::net::AddrParseError
+        
+    Ok(())
+}
+\end{lstlisting}
+
+{\color{blue}
+\emph{Типажный объект}, \verb|Box<dyn Error>|, является представителем \emph{любого типа}, реализующего тип \verb|Error|.
+}
+
+{\color{red}Необходимость заключения \emph{типажных объектов} в \verb|Box| обуславливается тем, что их \emph{размер} (в байтах в стеке) \emph{на момент компиляции не известен}.} У \verb|Box| есть известный размер в стеке. {\color{blue}И смысл его применения заключается в том, чтобы \emph{указывать} на то, для чего этот \emph{размер неизвестен}, в том числе и на типажные объекты.}
+
 
 
 
