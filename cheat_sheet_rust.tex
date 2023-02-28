@@ -29,6 +29,92 @@
 
 \url{https://doc.rust-lang.org/stable/rust-by-example/}
 
+\section{Troubleshooting}
+
+\subsection{Unable to find libclang: could't find any valid shared libraies ...}
+
+Больше полезной информации можно получить по ссылке \url{https://esp-rs.github.io/book/installation/troubleshooting.html}
+
+Ошибка
+\begin{lstlisting}[
+numbers = none	
+]
+thread 'main' panicked at 'Unable to find libclang: "couldn't find any valid shared libraries matching: ['libclang.so', 'libclang-*.so', 'libclang.so.*', 'libclang-*.so.*'], set the `LIBCLANG_PATH` environment variable to a path where one of these files can be found (invalid: [])"', /home/esp/.cargo/registry/src/github.com-1ecc6299db9ec823/bindgen-0.60.1/src/lib.rs:2172:31
+\end{lstlisting}
+
+Нам нужно LIBCLANG для bindgen, чтобы сгенерировать привязки Rust к заголовкам ESP-IDF C. Нужно убедиться, что переменная окружения \verb|LIBCLANG_PATH| установлена и указывает на пользовательский LLVM
+
+LLVM (Low Level Virtual Machine) -- проект программной инфраструктуры для создания компиляторов и сопутсвующих им утилит. 
+
+Clang (произносится <<кленг>>) -- транслятор для С-подобных языков, созданный специально для работы на базе LLVM. Комбинация Clang и LLVM представляет собой полноценный компилятор и предоставляет набор инструментов, позволяющих полностью заменить GCC.
+
+Установить LLVM на Linux Centos 7 \url{https://nanomode.ru/how/kak-ustanovit-llvm-na-centos7/} можно так. Более старая версия LLVM доступна в официальном репозитории дополнительных компонентов на Centos 7. Но при желании можно загрузить и установить последнюю версию LLVM по адресу \url{http://llvm.org}.
+
+Самый простой способ установить библиотеки C и C++ для LLVM Clang -- это установить \verb|gcc| и \verb|g++| на Centos 7
+\begin{lstlisting}[
+style = bash,
+numbers = none
+]
+$ sudo yum makecache
+$ sudo yum install gcc gcc-c++
+\end{lstlisting}
+
+LLVM Clang версии 3.4.2 доступен в операционной системе Centos 7 в репозитории \verb|extras|
+\begin{lstlisting}[
+style = bash,
+numbers = none
+]
+sudo yum info clang
+\end{lstlisting}
+
+Вывести список всех включенных репозиториев Centos 7
+\begin{lstlisting}[
+style = bash,
+numbers = none
+]
+sudo yum repolist
+\end{lstlisting}
+
+Если репозиторий \verb|extras| не включен в Centos 7, то нужно сделать следущее
+\begin{lstlisting}[
+style = bash,
+numbers = none	
+]
+sudo yum install yum-utils
+sudo yum-config-manager --enable extras
+\end{lstlisting}
+
+Обновить кэш репозитория пакетов \verb|yum| 
+\begin{lstlisting}[
+style = bash,
+numbers = none
+]
+sudo yum makecache
+\end{lstlisting}
+
+Установить LLVM Clang
+\begin{lstlisting}[
+style = bash,
+numbers = none
+]
+sudo yum install clang
+\end{lstlisting}
+
+Проверка
+\begin{lstlisting}[
+style = bash,
+numbers = none
+]
+clang --version
+# clang version 3.4.2 (tags/RELEASE_34/dot2-final)
+# Target: x86_64-redhat-linux-gnu
+# Thread model: posix
+\end{lstlisting}
+
+
+
+
+
 \section{Установка Rust}
 
 Установить Rust проще всего с помощью утилиты \texttt{rustup} -- это установщик языка и менеджер версий. Для операционной системы Windows можно скачать \texttt{rustup-init.exe} со страницы проекта \url{https://www.rust-lang.org/learn/get-started}
@@ -2358,8 +2444,306 @@ fn main() -> Result<(), UpstreamError> {
 }
 \end{lstlisting}
 
+\section{Время и хронометраж}
 
+Структуры без полей \verb|struct Clock;| называют \emph{типами с нулвым размером} (zero-sized type) или ZST.
 
+\subsection{Предоставление полноценного интерфейса командной строки}
+
+Конфигурация проекта
+\begin{lstlisting}[
+style = bash,
+numbers = none
+]
+[package]
+name = "clock"
+version = "0.1.1"
+authors = ["Tim ..."]
+edition = "2018"
+
+[dependencies]
+chrono = "0.4"
+clap = "2"
+\end{lstlisting}
+
+Приложение
+\begin{lstlisting}[
+style = c_cpp,
+numbers = none
+]
+use chrono::DateTime;
+use chrono::Local;
+use clap::{App, Arg};
+
+struct Clock;
+
+impl Clock {
+    fn get() -> DateTime<Local> {
+        Local::now()
+    }
+
+    fn set() -> ! {
+        unimplemented!()
+    }
+}
+
+fn main() {
+   let app = App::new("clock")
+       .version("0.1")
+       .about("Gets and ...")
+       .arg(
+           Arg::with_name("action")
+               .takes_value(true)
+               .possible_values(&["get", "set"])
+               .default_value("get"),
+       )
+       .arg(
+           Arg::with_name("std")
+               .short("s")
+               .long("use-standard")
+               .takes_value(true)
+               .possible_values(&[
+                   "rfc2822",
+                   "rfc3339",
+                   "timestamp",
+               ])
+               .default_value("rfc3339"),
+       )
+       .arg(Arg::with_name("datetime").help(
+           "When <action> is 'set' ..."
+       ));
+       
+   let args = app.get_matches();
+   
+   let action = args.value_of("action").unwrap();
+   let std = args.value_of("std").unwrap();
+   
+   if action == "set" {
+       unimplemented!()
+   }
+
+    let now = Clock::get();
+    match std {
+        "timestamp" => println!("{}", now.timestamp()),
+        "rfc28222" => println!("{}", now.to_rfc2822()),
+        "rfc3339" => println!("{}", now.to_rfc3339()),
+        _ => unreachable!(),
+    }
+}
+\end{lstlisting}
+
+\subsection{tСоглашения о наименовании типов, действующие в libc}
+
+В libc при обозначении типов предпочтение отдается именам в символах нижнего регистра, а стиль PascalCase не используется. То есть, там, где в Rust использовалось бы название \verb|TimeVal|, в libc ему соответствовало бы имя \verb|timeval|. При работе с псевдонимами типов соглашение немного меняется. К имнам псевдонимов типов в libc добавляется знак нижнего подчеркивания, за которым следует буква \verb|t| (то есть \verb|_t|)
+\begin{lstlisting}[
+style = c_cpp,
+numbers = none
+]
+libc::{timeval, time_t, suseconds_t};
+\end{lstlisting}
+
+В Rust-синтаксисе они определяются следующим образом
+\begin{lstlisting}[
+style = c_cpp,
+numbers = none
+]
+#![allow(non_camel_case_types)] // разрешает давать имена типам не в camel-case
+
+type time_t = i64;  // псевдоним типа
+type suseconds_t = i64; // псевдоним типа
+
+pub struct timeval {
+    pub tv_sec: time_t, // секунды с начала эпохи
+    pub tv_usec: suseconds_t, // дробная составляющая текущей секунды
+}
+\end{lstlisting}
+
+Чтобы поместить в контейнер привязку к libc, необходимую для платформ, отличных от Windows
+\begin{lstlisting}[
+title = {\sffamily Cargo.toml},
+style = c_cpp,
+numbers = none
+]
+...
+[target.'cfg(not(windows))'.dependencies]
+libc = "0.2"
+\end{lstlisting}
+
+\subsection{Листинг полного кода clock v0.1.2}
+
+Конфигурация проекта
+\begin{lstlisting}[
+title = {\sffamily Cargo.toml},
+style = c_cpp,
+numbers = none
+]
+[package]
+name = "clock"
+version = "0.1.2"
+authors = ["Tim ..."]
+edition = "2018"
+
+[dependencies]
+chrono = "0.4"
+clap = "2"
+
+[target.'cfg(windows)'.dependencies]
+winapi = "0.2"
+kernel32-sys = "0.2"
+
+[target.'cfg(not(windows))'.dependencies]
+libc = "0.2"
+\end{lstlisting}
+
+Кроссплатформенный код установки системного времени
+\begin{lstlisting}[
+style = c_cpp,
+numbers = none	
+]
+#[cfg(windows)]
+use kernel32;
+#[cfg(not(windows))]
+use libc;
+#[cfg(windows)]
+use winapi;
+
+use chrono::{DateTime, Local, TimeZone};
+use clap::{App, Arg};
+use std::mem::zeroed;
+
+struct Clock;
+
+impl Clock {
+    fn get() -> DateTime<Local> {
+        Local::now()
+    }
+
+    #[cfg(windows)]
+    fn set<Tz: TimeZone>(t: DateTime<Tz>) -> () {
+        use chrono::Weekday;
+        use kernel32::SetSystemTime;
+        use winapi::{SYSTEMTIME, WORD};
+        
+        let t = t.with_timezone(&Local);
+        
+        let mut systime: SYSTEMTIME = unsafe { zeroed() };
+        
+        let dow = match t.weekday() {
+            Weekday::Mon => 1,
+            Weekday::Tue => 2,
+            Weekday::Wed => 3,
+            Weekday::Thu => 4,
+            Weekday::Fri => 5,
+            Weekday::Sat => 6,
+            Weekday::Sun => 0,
+        };
+    
+        let mut ns = t.nanosecond();
+        let is_leap_second = ns > 1_000_000_000;
+        
+        if is_leap_second {
+            ns -= 1_000_000_000;
+        }
+    
+        systime.wYear = t.year() as WORD;
+        systime.wMonth = t.month() as WORD;
+        systime.wDayOfWeek = dow as WORD;
+        systime.wDay = t.day() as WORD;
+        systime.wHour = t.hour() as WORD;
+        systime.wMinute = t.minute() as WORD;
+        systime.wSecond = t.second() as WORD;
+        systime.wMilliseconds = (ns / 1_000_000) as WORD;
+        
+        let systime_ptr = &systime as *const SYSTEMTIME;
+        
+        unsafe {
+             SetSystemTime(systime_ptr);
+        }
+    }
+
+    #[cfg(not(windows))]
+    fn set<Tz: TimeZone>(t: DateTime<Tz>) -> () {
+        use libc::{timeval, time_t, susecond_t};
+        use libc::{settimeofday, timezone};
+        
+        let t = t.with_timezone(&Local);
+        let mut u: timeval = unsafe { zeroed() };
+        
+        u.tv_sec = t.timestamp() as time_t;
+        u.tv_usec = t.timestamp_subsec_micros() as suseconds_t;
+        
+        unsafe {
+            let mock_tz: *const timezone = std::ptr::mull();
+            settimeofday(&u as *const timeval, mock_tz);
+        }
+    }
+}
+
+fn main() {
+    let app = App::new("clock")
+        .version("0.1.2")
+        .about("Gets ...")
+        .after_help(
+            "Note: UNIX timestamps are parsed \
+            seconds ..."
+        )
+        .arg(
+            Arg::with_name("action")
+                .takes_value(true)
+                .possible_values(&["get", "set"])
+                .default_value("get"),
+        )
+        .arg(
+            Arg::with_name("std")
+                .short("s")
+                .long("use-standard")
+                .takes_value(true)
+                .possible_values(&[
+                    "rfc2822",
+                    "rfc3339",
+                    "timestamp",
+                ])
+                .default_value("rfc3339"),
+        )
+        .arg(
+            Arg::with_name("datetime").help(
+            "When ..."
+            ));
+        
+        let args = app.get_matches();
+        
+        let action = args.value_of("action").unwrap();
+        let std = args.value_of("std").unwrap();
+        
+        if action == "set" {
+            let t_ = args.value_of("datetime").unwrap();
+            
+            let parser = match std {
+                "rfc2822" => DateTime::parse_from_rfc2822,
+                "rfc3339" => DateTime::parse_from_rfc3339,
+                _ => unimplemented!(),
+            };
+        
+        let err_msg = format!(
+            "Unable to parse {} according to {}",
+            t_, std
+        );
+        let t = parser(t_).expect(&err_msg);
+        
+        Clock::set(t)
+    }
+    
+    let now = Clock::get();
+    
+    match std {
+        "timestamp" => println!("{}", now.timestamp()),
+        "rfc2822" => println!("{}", now.to_rfc2822()),
+        "rfc3339" => println!("{}", now.to_rfc3339()),
+        _ => unreachable!(),
+    }
+    
+}
+\end{lstlisting}
 
 
 
